@@ -1,5 +1,4 @@
-// Configurações da extensão. Para usar um backend hospedado, troque API_BASE_URL
-// (e ajuste "host_permissions" no manifest.json).
+// Configurações da extensão. Se mudar API_BASE_URL, ajuste também "host_permissions" no manifest.json.
 export const CONFIG = {
   API_BASE_URL: 'https://verificaai-9t7f.onrender.com',
   ANALYZE_PATH: '/api/analyze',

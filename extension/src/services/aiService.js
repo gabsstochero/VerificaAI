@@ -30,7 +30,7 @@ export async function analyzeNews(text) {
       throw new AnalysisError('A análise demorou mais do que o esperado. Tente novamente.', 'TIMEOUT');
     }
     throw new AnalysisError(
-      'Não consegui falar com o serviço de análise. Confira se o servidor está em execução e tente novamente.',
+      'Não consegui falar com o serviço de análise. Ele pode estar iniciando: aguarde alguns segundos e tente novamente.',
       'NETWORK',
     );
   } finally {
