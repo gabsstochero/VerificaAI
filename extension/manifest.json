@@ -18,6 +18,6 @@
     "128": "icons/icon128.png"
   },
   "host_permissions": [
-    "https://verificaai-9t7f.onrender.com/api/health*"
+    "https://verificaai-9t7f.onrender.com/*"
   ]
 }
