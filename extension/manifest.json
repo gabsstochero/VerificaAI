@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "VerificaAI",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Use inteligência artificial para analisar informações e identificar possíveis fake news.",
   "action": {
     "default_title": "VerificaAI",
@@ -18,7 +18,6 @@
     "128": "icons/icon128.png"
   },
   "host_permissions": [
-    "http://localhost:3000/*",
-    "http://127.0.0.1:3000/*"
+    "https://verificaai-9t7f.onrender.com/api/health*"
   ]
 }
