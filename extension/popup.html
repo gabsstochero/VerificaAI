@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>VerificaAI</title>
+    <link rel="stylesheet" href="src/styles/popup.css" />
+  </head>
+  <body>
+    <header class="header">
+      <svg class="logo" viewBox="0 0 40 40" aria-hidden="true">
+        <circle cx="17" cy="17" r="12" fill="#ffe24a" />
+        <path d="M11.5 17.5l4 4 7.5-8" fill="none" stroke="#1f2fa3" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+        <path d="M26.5 26.5L35 35" stroke="#ffe24a" stroke-width="4.5" stroke-linecap="round" />
+      </svg>
+      <div>
+        <h1 class="title">VerificaAI</h1>
+        <p class="tagline">Use inteligência artificial para analisar informações e identificar possíveis fake news.</p>
+      </div>
+    </header>
+
+    <main>
+      <!-- Estado 1: colar o texto -->
+      <section id="input-section" class="input-section">
+        <div id="error" class="error" role="alert" hidden></div>
+
+        <label class="label" for="news-text">Cole a notícia ou o texto que deseja analisar</label>
+        <textarea id="news-text" maxlength="8000" placeholder="Cole aqui o texto da notícia, da mensagem ou da postagem…"></textarea>
+        <div class="field-meta">
+          <span id="hint"></span>
+          <span id="counter">0 / 8000</span>
+        </div>
+
+        <button id="analyze-btn" class="btn btn--primary" type="button" disabled>Analisar notícia</button>
+      </section>
+
+      <!-- Estado 2: carregando -->
+      <section id="loading" class="loading" role="status" aria-live="polite" hidden>
+        <div class="spinner" aria-hidden="true"></div>
+        <p class="loading-title">Analisando o conteúdo…</p>
+        <p class="loading-hint">A IA confere as afirmações em fontes na web. Pode levar até um minuto.</p>
+      </section>
+
+      <!-- Estado 3: resultado -->
+      <section id="result" class="result" tabindex="-1" aria-live="polite" hidden></section>
+    </main>
+
+    <footer class="disclaimer">
+      A análise é feita por inteligência artificial e serve apenas como apoio. Ela pode errar e não substitui a
+      checagem em veículos de imprensa e agências de verificação.
+    </footer>
+
+    <script type="module" src="src/popup.js"></script>
+  </body>
+</html>
