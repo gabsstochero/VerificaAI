@@ -1,134 +1,57 @@
-import { GoogleGenAI } from '@google/genai';
-import { config } from './config.js';
-import { buildResearchInstruction, buildSystemPrompt, buildUserMessage } from './prompt.js';
-import { extractSources, normalizeResult, parseModelOutput } from './normalize.js';
-import { mockAnalysis } from './mock.js';
+import { CONFIG } from '../config.js';
 
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+export class AnalysisError extends Error {
+  constructor(message, code = 'UNKNOWN') {
+    super(message);
+    this.name = 'AnalysisError';
+    this.code = code;
+  }
+}
 
-async function withRetry(fn, tries = 3) {
-  for (let i = 0; ; i++) {
-    try {
-      return await fn();
-    } catch (err) {
-      const code = Number(err.status) || Number(err.code);
-      if (code !== 503 || i >= tries - 1) throw err;
-      await sleep(1500 * (i + 1));
+/**
+ * Envia o texto ao backend e devolve:
+ * { classification, label, confidence, explanation, checkPoints, sources }
+ * Lança AnalysisError com uma mensagem já pronta para o usuário.
+ */
+export async function analyzeNews(text) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), CONFIG.REQUEST_TIMEOUT_MS);
+
+  let response;
+  try {
+    response = await fetch(`${CONFIG.API_BASE_URL}${CONFIG.ANALYZE_PATH}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text }),
+      signal: controller.signal,
+    });
+  } catch (err) {
+    if (err.name === 'AbortError') {
+      throw new AnalysisError('A análise demorou mais do que o esperado. Tente novamente.', 'TIMEOUT');
     }
-  }
-}
-
-export class MissingApiKeyError extends Error {
-  constructor() {
-    super('GEMINI_API_KEY não configurada.');
-    this.name = 'MissingApiKeyError';
-  }
-}
-
-let client;
-function getClient() {
-  if (!config.geminiApiKey) throw new MissingApiKeyError();
-  // GEMINI_BASE_URL só existe para testes (apontar para um servidor simulado);
-  // não é preciso defini-la em uso normal.
-  const baseUrl = process.env.GEMINI_BASE_URL?.trim();
-  client ??= new GoogleGenAI({
-    apiKey: config.geminiApiKey,
-    // Tempo máximo de espera por resposta do Gemini (45 s).
-    httpOptions: { timeout: 45_000, ...(baseUrl ? { baseUrl } : {}) },
-  });
-  return client;
-}
-
-// A API do Gemini não permite combinar a ferramenta de busca com saída em JSON
-// estrito na mesma chamada. Por isso a análise usa até duas chamadas:
-// 1) pesquisa (texto livre, com busca no Google) — opcional, via USE_WEB_SEARCH;
-// 2) classificação (JSON estrito, sem busca), usando o resumo da etapa 1.
-const RESULT_SCHEMA = {
-  type: 'OBJECT',
-  properties: {
-    classificacao: {
-      type: 'STRING',
-      enum: ['possivelmente_verdadeira', 'possivelmente_falsa', 'nao_foi_possivel_verificar'],
-    },
-    confianca: { type: 'INTEGER' },
-    explicacao: { type: 'STRING' },
-    pontos_para_verificar: { type: 'ARRAY', items: { type: 'STRING' } },
-  },
-  required: ['classificacao', 'confianca', 'explicacao', 'pontos_para_verificar'],
-  propertyOrdering: ['classificacao', 'confianca', 'explicacao', 'pontos_para_verificar'],
-};
-
-/** Etapa 1 (opcional): pesquisa na web para reunir evidências sobre o texto. */
-async function research(ai, text) {
-  if (!process.env.TAVILY_API_KEY) throw new Error('TAVILY_API_KEY ausente');
-
-  const query = text.replace(/\s+/g, ' ').trim().slice(0, 300);
-  const res = await fetch('https://api.tavily.com/search', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${process.env.TAVILY_API_KEY}`,
-    },
-    body: JSON.stringify({ query, search_depth: 'basic', max_results: 6 }),
-    // Tempo máximo de espera pela pesquisa (15 s); se passar, seguimos sem ela.
-    signal: AbortSignal.timeout(15_000),
-  });
-  if (!res.ok) {
-    const err = new Error(`Tavily ${res.status}`);
-    err.status = res.status;
-    throw err;
+    throw new AnalysisError(
+      'Não consegui falar com o serviço de análise. Ele pode estar iniciando: aguarde alguns segundos e tente novamente.',
+      'NETWORK',
+    );
+  } finally {
+    clearTimeout(timer);
   }
 
-  const { results = [] } = await res.json();
-  const notes = results.length
-    ? 'Trechos de fontes encontradas na web para conferir as afirmações do texto:\n' +
-      results
-        .map((r) => `- [${new URL(r.url).hostname}] ${r.title}: ${String(r.content).slice(0, 400)}`)
-        .join('\n')
-    : 'A busca na web não retornou resultados relevantes.';
-
-  const sources = results.slice(0, 5).map((r) => ({ title: r.title, url: r.url }));
-  return { notes, sources };
-}
-
-/** Etapa 2: classifica o texto (com ou sem resumo de pesquisa) e devolve JSON estrito. */
-async function classify(ai, text, researchNotes) {
-  const response = await ai.models.generateContent({
-    model: config.model,
-    contents: buildUserMessage(text, researchNotes),
-    config: {
-      systemInstruction: buildSystemPrompt(),
-      responseMimeType: 'application/json',
-      responseSchema: RESULT_SCHEMA,
-    },
-  });
-
-  return parseModelOutput(response.text);
-}
-
-/** Envia o texto à IA e devolve o resultado já normalizado. */
-export async function analyzeText(text) {
-  if (config.mockMode) return mockAnalysis(text);
-
-  const ai = getClient();
-  let researchNotes = '';
-  let sources = [];
-  const t0 = Date.now();
-  console.log('[analyze] iniciando análise');
-
-  if (config.useWebSearch) {
-    try {
-      const result = await research(ai, text);
-      researchNotes = result.notes;
-      sources = result.sources;
-      console.log(`[analyze] pesquisa ok (${Date.now() - t0} ms, ${sources.length} fontes)`);
-    } catch (err) {
-      // Qualquer falha na pesquisa: seguimos só com a classificação.
-      console.warn(`[analyze] pesquisa indisponível (${err.message}); seguindo sem pesquisa.`);
-    }
+  let data = null;
+  try {
+    data = await response.json();
+  } catch {
+    /* resposta sem JSON: tratada abaixo */
   }
 
-  const raw = await withRetry(() => classify(ai, text, researchNotes));
-  console.log(`[analyze] concluída em ${Date.now() - t0} ms`);
-  return { ...normalizeResult(raw), sources };
+  if (!response.ok) {
+    throw new AnalysisError(
+      data?.error || `O serviço de análise retornou um erro (${response.status}). Tente novamente.`,
+      'API_ERROR',
+    );
+  }
+  if (!data?.explanation) {
+    throw new AnalysisError('O serviço de análise devolveu uma resposta incompleta. Tente novamente.', 'BAD_RESPONSE');
+  }
+  return data;
 }
