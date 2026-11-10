@@ -33,7 +33,8 @@ function getClient() {
   const baseUrl = process.env.GEMINI_BASE_URL?.trim();
   client ??= new GoogleGenAI({
     apiKey: config.geminiApiKey,
-    ...(baseUrl ? { httpOptions: { baseUrl } } : {}),
+    // Tempo máximo de espera por resposta do Gemini (45 s).
+    httpOptions: { timeout: 45_000, ...(baseUrl ? { baseUrl } : {}) },
   });
   return client;
 }
@@ -69,6 +70,8 @@ async function research(ai, text) {
       Authorization: `Bearer ${process.env.TAVILY_API_KEY}`,
     },
     body: JSON.stringify({ query, search_depth: 'basic', max_results: 6 }),
+    // Tempo máximo de espera pela pesquisa (15 s); se passar, seguimos sem ela.
+    signal: AbortSignal.timeout(15_000),
   });
   if (!res.ok) {
     const err = new Error(`Tavily ${res.status}`);
@@ -110,19 +113,22 @@ export async function analyzeText(text) {
   const ai = getClient();
   let researchNotes = '';
   let sources = [];
+  const t0 = Date.now();
+  console.log('[analyze] iniciando análise');
 
   if (config.useWebSearch) {
-  try {
-    const result = await research(ai, text);
-    researchNotes = result.notes;
-    sources = result.sources;
-  } catch (err) {
-    const code = Number(err.status) || Number(err.code);
-    if (code !== 429 && code !== 503 && !(err instanceof TypeError)) throw err;
-    console.warn(`[analyze] pesquisa indisponível (${err.message}); seguindo sem pesquisa.`);
+    try {
+      const result = await research(ai, text);
+      researchNotes = result.notes;
+      sources = result.sources;
+      console.log(`[analyze] pesquisa ok (${Date.now() - t0} ms, ${sources.length} fontes)`);
+    } catch (err) {
+      // Qualquer falha na pesquisa: seguimos só com a classificação.
+      console.warn(`[analyze] pesquisa indisponível (${err.message}); seguindo sem pesquisa.`);
+    }
   }
-}
 
   const raw = await withRetry(() => classify(ai, text, researchNotes));
+  console.log(`[analyze] concluída em ${Date.now() - t0} ms`);
   return { ...normalizeResult(raw), sources };
 }
