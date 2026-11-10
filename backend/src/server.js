@@ -9,6 +9,40 @@ const app = express();
 app.set('trust proxy', 1);
 app.disable('x-powered-by');
 app.use(express.json({ limit: '50kb' }));
+// Página pública exigida pela Chrome Web Store.
+app.get('/privacidade', (_req, res) => {
+  res.type('html').send(`<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VerificaAI – Política de Privacidade</title>
+<style>body{font-family:system-ui,sans-serif;max-width:720px;margin:40px auto;padding:0 16px;line-height:1.6;color:#222}h1{color:#1f2fa3}</style>
+</head><body>
+<h1>Política de Privacidade – VerificaAI</h1>
+<p><em>Última atualização: 9 de novembro de 2026</em></p>
+
+<h2>Quais dados coletamos</h2>
+<p>A extensão VerificaAI coleta apenas o <strong>texto que você cola</strong> no campo de análise e envia ao clicar em "Analisar notícia". Não coletamos nome, e-mail, histórico de navegação, localização, conteúdo das páginas que você visita nem qualquer outro dado pessoal.</p>
+
+<h2>Como usamos esses dados</h2>
+<p>O texto é enviado ao nosso servidor exclusivamente para fazer a análise. O servidor repassa o texto para:</p>
+<ul>
+<li><strong>Google Gemini API</strong> (Google), que analisa o conteúdo;</li>
+<li><strong>Tavily</strong>, serviço de busca usado para conferir as afirmações em fontes na web.</li>
+</ul>
+<p>Esses serviços processam o texto segundo as suas próprias políticas de privacidade.</p>
+
+<h2>Armazenamento</h2>
+<p>Não armazenamos os textos enviados nem os resultados das análises. Não há banco de dados, contas de usuário ou histórico. O endereço IP é usado apenas temporariamente, em memória, para limitar o número de análises por minuto e evitar abusos.</p>
+
+<h2>Compartilhamento</h2>
+<p>Não vendemos, alugamos nem compartilhamos seus dados com terceiros, exceto os serviços citados acima, que são necessários para a análise.</p>
+
+<h2>Recomendação</h2>
+<p>Evite colar no VerificaAI dados pessoais ou informações sensíveis, seus ou de outras pessoas.</p>
+
+<h2>Contato</h2>
+<p>Dúvidas: gabriellystochero@gmail.com</p>
+</body></html>`);
+});
 
 // Só a extensão pode usar este servidor: outros sites são bloqueados,
 // assim ninguém consegue gastar seus créditos de API pelo navegador.
